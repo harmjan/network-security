@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <ostream>
 #include <algorithm>
-#include <set>
+#include <map>
 #include <list>
 #include <vector>
 
@@ -58,25 +58,38 @@ typedef ip<16> ipv6;
 std::ostream& operator<<(std::ostream& os, const ipv4& obj);
 std::ostream& operator<<(std::ostream& os, const ipv6& obj);
 
-typedef uint32_t as_number;
-typedef uint32_t timestamp;
+// Some literal typedef's
+typedef uint32_t AsNumber;
+typedef uint32_t Timestamp;
 
 /**
- * An advertised route in BGP.
+ * An event that happened route in BGP.
  */
 struct Route {
-	// The AS that advertised this route
-	as_number from;
-	// The AS that received this route
-	as_number sensor;
-	// The advertised path
-	std::vector<as_number> path;
+	// If this is and advertise or withdraw
+	// event. If this is a withdraw event will
+	// the path vector be unused.
+	enum {
+		ADVERTISED,
+		WITHDRAWN
+	} type;
 	// The timestamp when the route was advertised
-	timestamp advertised;
-	// The timestamp when the route was revoked
-	timestamp revoked;
+	Timestamp time;
+	// The AS that advertised this route
+	AsNumber from;
+	// The AS that received this route
+	AsNumber sensor;
+	// If the path is ordered, if the sequence
+	// of AS numbers is advertised in the correct
+	// order.
+	bool path_ordered;
+	// The advertised path
+	std::vector<AsNumber> path;
 };
 
+// Store the sequence of Route events in
+// a linked list.
 typedef std::list<Route> Routes;
-typedef std::set<ipv4> RouteTableV4;
-typedef std::set<ipv6> RouteTableV6;
+// This object stores the mapping from ip
+// to the sequence of events.
+typedef std::map<ipv4,Routes> RouteHistory;

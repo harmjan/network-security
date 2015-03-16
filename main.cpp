@@ -9,8 +9,7 @@ int main(int argc, char** argv) {
 		return EXIT_FAILURE;
 	}
 
-	RouteTableV4 v4_routes;
-	RouteTableV6 v6_routes;
+	RouteHistory v4_routes;
 
 	// Loop over the file names and import them
 	for( int i=1; i<argc; ++i ) {
@@ -22,10 +21,15 @@ int main(int argc, char** argv) {
 		}
 
 		// Import the file into the maps
-		Import::import( file_stream, v4_routes, v6_routes );
+		Import::import( file_stream, v4_routes );
 	}
 
-	for( auto i : v4_routes ) std::cout << "\t" << i << std::endl;
+	for( auto i : v4_routes ) {
+		std::cout << "\t" << i.first << std::endl;
+		for( auto j : i.second ) {
+			std::cout << "\t\t" << (j.type==Route::ADVERTISED?"Advertised":"Withdrawn") << " route on " << j.time << " from " << j.from << " to " << j.sensor << std::endl;
+		}
+	}
 
 	return 0;
 }

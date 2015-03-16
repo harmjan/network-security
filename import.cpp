@@ -8,66 +8,25 @@
 
 namespace {
 	/**
-	 * Read a BGP message from the stream and add the data to
-	 * the routing table.
+	 * Read some bytes from the stream and do nothing with
+	 * them.
 	 */
-	void read_bgp_message( std::istream& stream, RouteTableV4& v4_routes, RouteTableV6& v6_routes ) {
-		// Suppress warnings
-		v6_routes.clear();
+	void read_and_ditch( std::istream& stream, std::size_t length ) {
+		char* temporary_buffer = new char[length];
+		stream.read( temporary_buffer, length );
+		delete[] temporary_buffer;
+	}
 
-		std::uint8_t marker[16];
-		std::uint16_t length;
-		std::uint8_t type;
-		// Read the BGP header from the stream
-		stream.read( reinterpret_cast<char*>(&marker), sizeof(marker) );
-		stream.read( reinterpret_cast<char*>(&length), sizeof(length) );
-		stream.read( reinterpret_cast<char*>(&type),   sizeof(type) );
-
-		// Correct for big Endiannes
-		length = ntohs( length );
-
-		// Check if the marker is still aligned
-		for( size_t i=0; i<16; ++i ) {
-			if( marker[i] != 0xFF ) std::cerr << "Marker invalid" << std::endl;
-		}
-		// If this is a keep-alive message we are done reading this,
-		// nothing comes after this.
-		if( type == BGP::Type::KEEPALIVE ) return;
-		// If it's not a keep-alive and not an update message throw
-		// an error tantrum.
-		if( type != BGP::Type::UPDATE ) std::cerr << "Non update BGP message, type " << static_cast<int>(type) << std::endl;
-		//std::cerr << "Read BGP message of type " << static_cast<int>(type) << " with length " << length << std::endl;
-
-		std::uint16_t withdrawn_length;
-		stream.read( reinterpret_cast<char*>(&withdrawn_length), sizeof(withdrawn_length) );
-		withdrawn_length = ntohs( withdrawn_length );
-		{
-			char* tmp = new char[withdrawn_length];
-			stream.read( tmp, withdrawn_length );
-			delete[] tmp;
-		}
-
-		std::uint16_t path_length;
-		stream.read( reinterpret_cast<char*>(&path_length), sizeof(path_length) );
-		path_length = ntohs( path_length );
-		{
-//			std::uint8_t attr_flags, attr_type;
-//			std::uint16_t attr_length;
-//			// Read out the attribute header
-//			stream.read( reinterpret_cast<char*>(&attr_flags), sizeof(attr_flags) );
-//			stream.read( reinterpret_cast<char*>(&attr_type),  sizeof(attr_type) );
-//			// The length is 2 octets if the extended flag bit is
-//			// 1, otherwise 1 octet. The current code only works
-//			// if the host uses little endian.
-//			stream.read( reinterpret_cast<char*>(&attr_length), (attr_flags&BGP::Attribute::Flags::EXTENDED)?2:1 );
-			char* tmp = new char[path_length];
-			stream.read( tmp, path_length );
-			delete[] tmp;
-		}
-
-		std::uint16_t reachability_length = length - 23 - withdrawn_length - path_length;
-		{
-			std::uint16_t length = reachability_length;
+	namespace bgp {
+		/**
+		 * Read in IP prefixes untill length amount of bytes
+		 * are read. This is the same for reading the newly
+		 * announced routes as it is reading in the withdrawn
+		 * routes which is why this piece of code was refactored
+		 * to a separate function.
+		 */
+		std::vector<ipv4> read_prefixes( std::istream& stream, std::uint16_t length ) {
+			std::vector<ipv4> vec;
 			while( length > 0 ) {
 				ipv4 range;
 				// Read out an IP range directly into the object.
@@ -76,12 +35,102 @@ namespace {
 				stream.read( reinterpret_cast<char*>(range.val), octets );
 				for( size_t i=octets; i<4; ++i ) range.val[i] = 0;
 
-				// Update the length with the number of 
+				// Update the length with the number of
 				// read octets.
 				length -= sizeof(range.suffix) + octets;
 
-				// Add this found route to the route table
-				v4_routes.insert(range);
+				vec.push_back( range );
+			}
+			return vec;
+		}
+
+		/**
+		 * Read the attributes of a BGP message and put
+		 * the relevant attributes in a Route object.
+		 */
+		void read_attributes( std::istream& stream, std::size_t length, Route& route ) {
+			while( length > 0 ) {
+				std::uint8_t attr_flags, attr_type;
+				std::uint16_t attr_length;
+				// Read out the attribute header
+				stream.read( reinterpret_cast<char*>(&attr_flags), sizeof(attr_flags) );
+				stream.read( reinterpret_cast<char*>(&attr_type),  sizeof(attr_type) );
+				// The length is 2 octets if the extended flag bit is
+				// 1, otherwise 1 octet.
+				if( attr_flags & BGP::Attribute::Flags::EXTENDED ) {
+					stream.read( reinterpret_cast<char*>(&attr_length), 2 );
+					attr_length = ntohs(attr_length);
+				}
+				else {
+					// The current code only works if the host uses little endian.
+					attr_length = 0;
+					stream.read( reinterpret_cast<char*>(&attr_length), 1 );
+				}
+
+				read_and_ditch( stream, attr_length );
+				length -= sizeof(attr_flags) + sizeof(attr_type) + ((attr_flags&BGP::Attribute::Flags::EXTENDED)?2:1) + attr_length;
+			}
+		}
+
+		/**
+		 * Read a BGP message from the stream and add the data to
+		 * the routing table.
+		 */
+		void read_message( std::istream& stream, RouteHistory& v4_routes, Route route ) {
+			std::uint8_t marker[16];
+			std::uint16_t length;
+			std::uint8_t type;
+			// Read the BGP header from the stream
+			stream.read( reinterpret_cast<char*>(&marker), sizeof(marker) );
+			stream.read( reinterpret_cast<char*>(&length), sizeof(length) );
+			stream.read( reinterpret_cast<char*>(&type),   sizeof(type) );
+
+			// Correct for big Endiannes
+			length = ntohs( length );
+
+			// Check if the marker is still aligned
+			for( size_t i=0; i<16; ++i ) {
+				if( marker[i] != 0xFF ) std::cerr << "Marker invalid" << std::endl;
+			}
+			// If this is a keep-alive message we are done reading this,
+			// nothing comes after this.
+			if( type == BGP::Type::KEEPALIVE ) return;
+			// If it's not a keep-alive and not an update message throw
+			// an error tantrum and throw away the message.
+			if( type != BGP::Type::UPDATE ) {
+				std::cerr << "Non update BGP message, type " << static_cast<int>(type) << std::endl;
+				read_and_ditch( stream, length-19 );
+				return;
+			}
+			//std::cerr << "Read BGP message of type " << static_cast<int>(type) << " with length " << length << std::endl;
+
+			// The first variable block in the BGP message contains the withdrawn
+			// routes.
+			std::uint16_t withdrawn_length;
+			stream.read( reinterpret_cast<char*>(&withdrawn_length), sizeof(withdrawn_length) );
+			withdrawn_length = ntohs( withdrawn_length );
+			for( ipv4 range : read_prefixes( stream, withdrawn_length ) ) {
+				Route r(route);
+				r.type = Route::WITHDRAWN;
+				v4_routes[range].push_back( r );
+			}
+
+			// Read the attributes from the stream and put the relevant
+			// attributes into a Route object.
+			std::uint16_t attribute_length;
+			stream.read( reinterpret_cast<char*>(&attribute_length), sizeof(attribute_length) );
+			attribute_length = ntohs( attribute_length );
+			Route route_attributes(route);
+			route_attributes.type = Route::ADVERTISED;
+			read_attributes( stream, attribute_length, route_attributes );
+
+			// The next variable block in the BGP message is the Network
+			// Layer Reachability Information. This block contains the
+			// ipv4 addresses that are advertised in this message with
+			// the path attributes in the previous block.
+			std::uint16_t reachability_length = length - 23 - withdrawn_length - attribute_length;
+			for( ipv4 range : read_prefixes( stream, reachability_length ) ) {
+				v4_routes[range].push_back( route_attributes );
 			}
 		}
 	}
@@ -90,8 +139,9 @@ namespace {
 	 * Read a MRT message from the stream and add the data if applicable
 	 * to the routing table.
 	 */
-	bool read_mrt_message( std::istream& stream, RouteTableV4& v4_routes, RouteTableV6& v6_routes ) {
-		uint32_t timestamp, length;
+	bool read_mrt_message( std::istream& stream, RouteHistory& v4_routes ) {
+		Timestamp timestamp;
+		uint32_t length;
 		uint16_t type, subtype;
 		// Read a message from the stream
 		stream.read( reinterpret_cast<char*>(&timestamp), sizeof(timestamp) );
@@ -145,26 +195,22 @@ namespace {
 				length -= sizeof(peer_ip) + sizeof(local_ip);
 			}
 
-			read_bgp_message( stream, v4_routes, v6_routes );
+			Route route;
+			route.time   = timestamp;
+			route.from   = peer;
+			route.sensor = local;
+			bgp::read_message( stream, v4_routes, route );
 		}
 		else if( type==MRT::Type::BGP4MP && subtype==MRT::BGP4MP::STATE_CHANGE_AS4 ) {
 			// These messages are in the data but have no useful information
 			// for us, just throw it away.
-			{
-				char* tmp = new char[length];
-				stream.read( tmp, length );
-				delete[] tmp;
-			}
+			read_and_ditch( stream, length );
 		}
 		else {
 			// If it's something else print an error and throw
 			// it away.
 			std::cerr << "Unsupported MRT type " << type << " with subtype " << subtype << " message ignored" << std::endl;
-			{
-				char* tmp = new char[length];
-				stream.read( tmp, length );
-				delete[] tmp;
-			}
+			read_and_ditch( stream, length );
 		}
 
 		return true;
@@ -172,9 +218,9 @@ namespace {
 }
 
 namespace Import {
-	void import( std::istream& stream, RouteTableV4& v4_routes, RouteTableV6& v6_routes ) {
+	void import( std::istream& stream, RouteHistory& v4_routes ) {
 		unsigned int messages = 0;
-		while( read_mrt_message( stream, v4_routes, v6_routes ) ) ++messages;
+		while( read_mrt_message( stream, v4_routes ) ) ++messages;
 		std::cerr << "Messages read: " << messages << std::endl;
 	}
 }
