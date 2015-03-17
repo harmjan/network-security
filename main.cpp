@@ -1,5 +1,9 @@
 #include <iostream>
 #include <fstream>
+#include <algorithm>
+
+#include <sstream>
+#include <fstream>
 
 #include "import.hpp"
 
@@ -24,12 +28,25 @@ int main(int argc, char** argv) {
 		Import::import( file_stream, v4_routes );
 	}
 
-	for( auto i : v4_routes ) {
-		std::cout << "\t" << i.first << std::endl;
-		for( auto j : i.second ) {
-			std::cout << "\t\t" << (j.type==Route::ADVERTISED?"Advertised":"Withdrawn") << " route on " << j.time << " from " << j.from << " to " << j.sensor << " via ";
-			for( auto n : j.path ) std::cout << n << " ";
-			std::cout << std::endl;
+	// Sort the events that happened per ip range
+	// based on time.
+	for( auto& i : v4_routes ) {
+		std::sort( i.second.begin(), i.second.end() );
+	}
+
+	// Print these routes to file
+	for( const auto i : v4_routes ) {
+		std::ostringstream ss("");
+		ss << i.first;
+		std::string ip = ss.str();
+		ip.replace( ip.find('/'), 1, "-" );
+		std::ofstream file( "ip/" + ip + ".csv" );
+		//std::cout << "\t" << i.first << std::endl;
+		for( const auto j : i.second ) {
+			//file << (j.type==Route::ADVERTISED?"Advertised":"Withdrawn") << " route on " << j.time << " from " << j.from << " to " << j.sensor << " via ";
+			file << j.time << ";" << j.from << ";" << j.sensor << ";" << (j.type==Route::ADVERTISED?"Advertised":"Withdrawn") << ";" << j.path_ordered << ";" << j.path.size() << ";";
+			for( const auto n : j.path ) file << n << " ";
+			file << std::endl;
 		}
 	}
 

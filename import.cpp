@@ -255,6 +255,5 @@ namespace Import {
 	void import( std::istream& stream, RouteHistory& v4_routes ) {
 		unsigned int messages = 0;
 		while( read_mrt_message( stream, v4_routes ) ) ++messages;
-		std::cerr << "Messages read: " << messages << std::endl;
 	}
 }

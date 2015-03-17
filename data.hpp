@@ -4,7 +4,6 @@
 #include <ostream>
 #include <algorithm>
 #include <map>
-#include <list>
 #include <vector>
 
 /**
@@ -85,11 +84,15 @@ struct Route {
 	bool path_ordered;
 	// The advertised path
 	std::vector<AsNumber> path;
+
+	/**
+	 * Order routes based on timestamp.
+	 */
+	bool operator < (const Route& other_route ) const {
+		return time < other_route.time;
+	}
 };
 
-// Store the sequence of Route events in
-// a linked list.
-typedef std::list<Route> Routes;
 // This object stores the mapping from ip
 // to the sequence of events.
-typedef std::map<ipv4,Routes> RouteHistory;
+typedef std::map<ipv4,std::vector<Route>> RouteHistory;
