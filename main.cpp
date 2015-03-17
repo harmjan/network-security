@@ -27,7 +27,9 @@ int main(int argc, char** argv) {
 	for( auto i : v4_routes ) {
 		std::cout << "\t" << i.first << std::endl;
 		for( auto j : i.second ) {
-			std::cout << "\t\t" << (j.type==Route::ADVERTISED?"Advertised":"Withdrawn") << " route on " << j.time << " from " << j.from << " to " << j.sensor << std::endl;
+			std::cout << "\t\t" << (j.type==Route::ADVERTISED?"Advertised":"Withdrawn") << " route on " << j.time << " from " << j.from << " to " << j.sensor << " via ";
+			for( auto n : j.path ) std::cout << n << " ";
+			std::cout << std::endl;
 		}
 	}
 

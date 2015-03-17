@@ -67,7 +67,38 @@ namespace {
 					stream.read( reinterpret_cast<char*>(&attr_length), 1 );
 				}
 
-				read_and_ditch( stream, attr_length );
+				// We are only interested in the AS_PATH attribute
+				if( attr_type == BGP::Attribute::Type::AS_PATH ) {
+					route.path_ordered = true;
+					std::uint16_t path_length = attr_length;
+					while( path_length > 0 ) {
+						std::uint8_t segment_type, segment_length;
+						stream.read( reinterpret_cast<char*>(&segment_type), 1 );
+						stream.read( reinterpret_cast<char*>(&segment_length), 1 );
+
+						// If this segment is an unordered set store
+						// that information in the route.
+						if( segment_type == 1 ) route.path_ordered = false;
+
+						// Read out the segment AS numbers
+						//read_and_ditch( stream, segment_length*4 );
+						for( int i=0; i<segment_length; ++i ) {
+							std::uint32_t as_number;
+							stream.read( reinterpret_cast<char*>(&as_number), sizeof(as_number) );
+							as_number = ntohl(as_number);
+							route.path.push_back( as_number );
+						}
+
+						// Update the path_length variable
+						path_length -= 2 + segment_length*4;
+					}
+				}
+				else {
+					// If it's not a path just throw the data away
+					read_and_ditch( stream, attr_length );
+				}
+
+				// Update the number of octets of attributes left
 				length -= sizeof(attr_flags) + sizeof(attr_type) + ((attr_flags&BGP::Attribute::Flags::EXTENDED)?2:1) + attr_length;
 			}
 		}
@@ -195,6 +226,9 @@ namespace {
 				length -= sizeof(peer_ip) + sizeof(local_ip);
 			}
 
+			// Create a route object and fill in information
+			// that is already known, let the read_message function
+			// fill in the rest if available.
 			Route route;
 			route.time   = timestamp;
 			route.from   = peer;
