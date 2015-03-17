@@ -130,10 +130,16 @@ namespace {
 			for( size_t i=0; i<16; ++i ) {
 				if( marker[i] != 0xFF ) std::cerr << "Marker invalid" << std::endl;
 			}
-			// If this is a keep-alive message we are done reading this,
-			// nothing comes after this.
-			if( type == BGP::Type::KEEPALIVE ) return;
-			// If it's not a keep-alive and not an update message throw
+			// If this is a valid bgp message that has no value for
+			// us just skip it.
+			if( type == BGP::Type::OPEN ||
+			    type == BGP::Type::NOTIFICATION ||
+			    type == BGP::Type::KEEPALIVE ||
+			    type == BGP::Type::ROUTEREFRESH ) {
+				read_and_ditch( stream, length-19 );
+				return;
+			}
+			// If it's still not an update message throw
 			// an error tantrum and throw away the message.
 			if( type != BGP::Type::UPDATE ) {
 				std::cerr << "Non update BGP message, type " << static_cast<int>(type) << std::endl;

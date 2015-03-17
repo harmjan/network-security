@@ -32,6 +32,7 @@ namespace BGP {
 		const uint8_t UPDATE       = 2;
 		const uint8_t NOTIFICATION = 3;
 		const uint8_t KEEPALIVE    = 4;
+		const uint8_t ROUTEREFRESH = 5;
 	}
 
 	namespace Attribute {
