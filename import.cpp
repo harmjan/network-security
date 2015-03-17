@@ -48,6 +48,7 @@ namespace {
 		 * Read the attributes of a BGP message and put
 		 * the relevant attributes in a Route object.
 		 */
+		template<typename AsNumberSize>
 		void read_attributes( std::istream& stream, std::size_t length, Route& route ) {
 			while( length > 0 ) {
 				std::uint8_t attr_flags, attr_type;
@@ -83,14 +84,19 @@ namespace {
 						// Read out the segment AS numbers
 						//read_and_ditch( stream, segment_length*4 );
 						for( int i=0; i<segment_length; ++i ) {
-							std::uint32_t as_number;
+							AsNumberSize as_number;
 							stream.read( reinterpret_cast<char*>(&as_number), sizeof(as_number) );
-							as_number = ntohl(as_number);
+							if( sizeof(AsNumberSize) == 4 ) {
+								as_number = ntohl(as_number);
+							}
+							else {
+								as_number = ntohs(as_number);
+							}
 							route.path.push_back( as_number );
 						}
 
 						// Update the path_length variable
-						path_length -= 2 + segment_length*4;
+						path_length -= 2 + segment_length*sizeof(AsNumberSize);
 					}
 				}
 				else {
@@ -107,6 +113,7 @@ namespace {
 		 * Read a BGP message from the stream and add the data to
 		 * the routing table.
 		 */
+		template<typename AsNumberSize>
 		void read_message( std::istream& stream, RouteHistory& v4_routes, Route route ) {
 			std::uint8_t marker[16];
 			std::uint16_t length;
@@ -153,7 +160,7 @@ namespace {
 			attribute_length = ntohs( attribute_length );
 			Route route_attributes(route);
 			route_attributes.type = Route::ADVERTISED;
-			read_attributes( stream, attribute_length, route_attributes );
+			read_attributes<AsNumberSize>( stream, attribute_length, route_attributes );
 
 			// The next variable block in the BGP message is the Network
 			// Layer Reachability Information. This block contains the
@@ -164,6 +171,55 @@ namespace {
 				v4_routes[range].push_back( route_attributes );
 			}
 		}
+	}
+
+	template<typename AsNumberSize>
+	void read_mrt_bgp4mp_message( std::istream& stream, RouteHistory& v4_routes, Timestamp timestamp, uint32_t length ) {
+		AsNumberSize peer, local;
+		uint16_t interface, address_family;
+		// Read the message info from the stream
+		stream.read( reinterpret_cast<char*>(&peer),           sizeof(peer) );
+		stream.read( reinterpret_cast<char*>(&local),          sizeof(local) );
+		stream.read( reinterpret_cast<char*>(&interface),      sizeof(interface) );
+		stream.read( reinterpret_cast<char*>(&address_family), sizeof(address_family) );
+		length -= sizeof(peer) + sizeof(local) + sizeof(interface) + sizeof(address_family);
+
+		// Correct for big endiannes
+		if( sizeof(AsNumberSize) == 4 ) {
+			peer       = ntohl( peer );
+			local      = ntohl( local );
+		}
+		else {
+			peer       = ntohs( peer );
+			local      = ntohs( local );
+		}
+		interface      = ntohs( interface );
+		address_family = ntohs( address_family );
+
+		// Read out the correct ip addresses
+		if( address_family == 1 ) {
+			// If it's ipv4
+			uint8_t peer_ip[4], local_ip[4];
+			stream.read( reinterpret_cast<char*>(&peer_ip),  sizeof(peer_ip) );
+			stream.read( reinterpret_cast<char*>(&local_ip), sizeof(local_ip) );
+			length -= sizeof(peer_ip) + sizeof(local_ip);
+		}
+		else {
+			// If it's ipv6
+			uint8_t peer_ip[16], local_ip[16];
+			stream.read( reinterpret_cast<char*>(&peer_ip),  sizeof(peer_ip) );
+			stream.read( reinterpret_cast<char*>(&local_ip), sizeof(local_ip) );
+			length -= sizeof(peer_ip) + sizeof(local_ip);
+		}
+
+		// Create a route object and fill in information
+		// that is already known, let the read_message function
+		// fill in the rest if available.
+		Route route;
+		route.time   = timestamp;
+		route.from   = peer;
+		route.sensor = local;
+		bgp::read_message<AsNumberSize>( stream, v4_routes, route );
 	}
 
 	/**
@@ -192,48 +248,14 @@ namespace {
 		//std::time_t tmp = timestamp;
 		//std::cerr << std::ctime(&tmp) << " " << type << " " << subtype << " " << length << std::endl;
 
-		// We only want to extract BGP messages and nothing else, the
-		// data set used only has 4 byte AS numbers.
+		// We only want to extract BGP messages and nothing else, check if
+		// the as number is 4 or 2 bytes and call the correct corresponding
+		// template.
 		if( type==MRT::Type::BGP4MP && subtype==MRT::BGP4MP::MESSAGE_AS4 ) {
-			uint32_t peer, local;
-			uint16_t interface, address_family;
-			// Read the message info from the stream
-			stream.read( reinterpret_cast<char*>(&peer),           sizeof(peer) );
-			stream.read( reinterpret_cast<char*>(&local),          sizeof(local) );
-			stream.read( reinterpret_cast<char*>(&interface),      sizeof(interface) );
-			stream.read( reinterpret_cast<char*>(&address_family), sizeof(address_family) );
-			length -= sizeof(peer) + sizeof(local) + sizeof(interface) + sizeof(address_family);
-
-			// Correct for big endiannes
-			peer           = ntohl( peer );
-			local          = ntohl( local );
-			interface      = ntohs( interface );
-			address_family = ntohs( address_family );
-
-			// Read out the correct ip addresses
-			if( address_family == 1 ) {
-				// If it's ipv4
-				uint8_t peer_ip[4], local_ip[4];
-				stream.read( reinterpret_cast<char*>(&peer_ip),  sizeof(peer_ip) );
-				stream.read( reinterpret_cast<char*>(&local_ip), sizeof(local_ip) );
-				length -= sizeof(peer_ip) + sizeof(local_ip);
-			}
-			else {
-				// If it's ipv6
-				uint8_t peer_ip[16], local_ip[16];
-				stream.read( reinterpret_cast<char*>(&peer_ip),  sizeof(peer_ip) );
-				stream.read( reinterpret_cast<char*>(&local_ip), sizeof(local_ip) );
-				length -= sizeof(peer_ip) + sizeof(local_ip);
-			}
-
-			// Create a route object and fill in information
-			// that is already known, let the read_message function
-			// fill in the rest if available.
-			Route route;
-			route.time   = timestamp;
-			route.from   = peer;
-			route.sensor = local;
-			bgp::read_message( stream, v4_routes, route );
+			read_mrt_bgp4mp_message<std::uint32_t>( stream, v4_routes, timestamp, length );
+		}
+		else if( type==MRT::Type::BGP4MP && subtype==MRT::BGP4MP::MESSAGE ) {
+			read_mrt_bgp4mp_message<std::uint16_t>( stream, v4_routes, timestamp, length );
 		}
 		else if( type==MRT::Type::BGP4MP && subtype==MRT::BGP4MP::STATE_CHANGE_AS4 ) {
 			// These messages are in the data but have no useful information
