@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
 		//std::cout << "\t" << i.first << std::endl;
 		for( const auto j : i.second ) {
 			//file << (j.type==Route::ADVERTISED?"Advertised":"Withdrawn") << " route on " << j.time << " from " << j.from << " to " << j.sensor << " via ";
-			file << j.time << ";" << j.from << ";" << j.sensor << ";" << (j.type==Route::ADVERTISED?"Advertised":"Withdrawn") << ";" << j.path_ordered << ";" << j.path.size() << ";";
+			file << j.time << ";" << j.from << ";" << j.sensor << ";" << (j.type==Route::ADVERTISED?"Advertised":"Withdrawn") << ";" << (j.path_ordered?"Sequence":"Set") << ";" << j.path.size() << ";";
 			for( const auto n : j.path ) file << n << " ";
 			file << std::endl;
 		}
