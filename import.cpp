@@ -142,7 +142,7 @@ namespace {
 			// If it's still not an update message throw
 			// an error tantrum and throw away the message.
 			if( type != BGP::Type::UPDATE ) {
-				std::cerr << "Non update BGP message, type " << static_cast<int>(type) << std::endl;
+				std::cerr << std::endl << "\tNon update BGP message, type " << static_cast<int>(type) << std::endl;
 				read_and_ditch( stream, length-19 );
 				return;
 			}
@@ -271,7 +271,7 @@ namespace {
 		else {
 			// If it's something else print an error and throw
 			// it away.
-			std::cerr << "Unsupported MRT type " << type << " with subtype " << subtype << " message ignored" << std::endl;
+			std::cerr << std::endl << "\tUnsupported MRT type " << type << " with subtype " << subtype << " message ignored" << std::endl;
 			read_and_ditch( stream, length );
 		}
 

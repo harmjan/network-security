@@ -10,6 +10,7 @@
 int main(int argc, char** argv) {
 	if( argc < 2 ) {
 		std::cerr << "Need at least 1 file name" << std::endl;
+		std::cerr << "Usage: " << argv[0] << " file [file, ...]" << std::endl;
 		return EXIT_FAILURE;
 	}
 
@@ -17,6 +18,7 @@ int main(int argc, char** argv) {
 
 	// Loop over the file names and import them
 	for( int i=1; i<argc; ++i ) {
+		std::cout << "\rReading file " << i << " of " << (argc-1) << " : " << argv[i] << std::flush;
 		// Open the file
 		std::ifstream file_stream( argv[i] );
 		if( !file_stream ) {
@@ -28,6 +30,7 @@ int main(int argc, char** argv) {
 		Import::import( file_stream, v4_routes );
 	}
 
+	std::cout << std::endl << "Sorting events on time" << std::endl;
 	// Sort the events that happened per ip range
 	// based on time.
 	for( auto& i : v4_routes ) {
@@ -35,7 +38,9 @@ int main(int argc, char** argv) {
 	}
 
 	// Print these routes to file
+	std::size_t count = 1;
 	for( const auto i : v4_routes ) {
+		std::cout << "\rWriting file " << count++ << " of " << v4_routes.size() << std::flush;
 		std::ostringstream ss("");
 		ss << i.first;
 		std::string ip = ss.str();
@@ -49,6 +54,7 @@ int main(int argc, char** argv) {
 			file << std::endl;
 		}
 	}
+	std::cout << std::endl;
 
 	return 0;
 }
