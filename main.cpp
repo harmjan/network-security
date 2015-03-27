@@ -2,10 +2,8 @@
 #include <fstream>
 #include <algorithm>
 
-#include <sstream>
-#include <fstream>
-
 #include "import.hpp"
+#include "file.hpp"
 
 int main(int argc, char** argv) {
 	if( argc < 2 ) {
@@ -18,7 +16,9 @@ int main(int argc, char** argv) {
 
 	// Loop over the file names and import them
 	for( int i=1; i<argc; ++i ) {
-		std::cout << "\rReading file " << i << " of " << (argc-1) << " : " << argv[i] << std::flush;
+		// Print some progress info
+		std::cout << "\rReading file " << i << " of " << (argc-1) << " : " << argv[i] << "                                            " << std::flush;
+
 		// Open the file
 		std::ifstream file_stream( argv[i] );
 		if( !file_stream ) {
@@ -28,32 +28,39 @@ int main(int argc, char** argv) {
 
 		// Import the file into the maps
 		Import::import( file_stream, v4_routes );
-	}
 
-	std::cout << std::endl << "Sorting events on time" << std::endl;
-	// Sort the events that happened per ip range
-	// based on time.
-	for( auto& i : v4_routes ) {
-		std::sort( i.second.begin(), i.second.end() );
-	}
+		// Every 100 files merge and clear the set
+		if( i%100==0 || i==argc-1 ) {
+			// Sort the events that happened per ip range
+			// based on time.
+			std::size_t count=1;
+			for( auto& route : v4_routes ) {
+				if( count%1000 == 0 )
+					std::cout << "\rReading file " << i << " of " << (argc-1) << " : " << argv[i] << " | Sorting " << count << "/" << v4_routes.size() << std::flush;
+				++count;
+				std::sort( route.second.begin(), route.second.end() );
+			}
 
-	// Print these routes to file
-	std::size_t count = 1;
-	for( const auto i : v4_routes ) {
-		std::cout << "\rWriting file " << count++ << " of " << v4_routes.size() << std::flush;
-		std::ostringstream ss("");
-		ss << i.first;
-		std::string ip = ss.str();
-		ip.replace( ip.find('/'), 1, "-" );
-		std::ofstream file( "ip/" + ip + ".csv" );
-		//std::cout << "\t" << i.first << std::endl;
-		for( const auto j : i.second ) {
-			//file << (j.type==Route::ADVERTISED?"Advertised":"Withdrawn") << " route on " << j.time << " from " << j.from << " to " << j.sensor << " via ";
-			file << j.time << ";" << j.from << ";" << j.sensor << ";" << (j.type==Route::ADVERTISED?"Advertised":"Withdrawn") << ";" << (j.path_ordered?"Sequence":"Set") << ";" << j.path.size() << ";";
-			for( const auto n : j.path ) file << n << " ";
-			file << std::endl;
+			// Read, merge and write the new files
+			count=1;
+			for( const auto route : v4_routes ) {
+				if( count%1000 == 0 )
+					std::cout << "\rReading file " << i << " of " << (argc-1) << " : " << argv[i] << " | Writing " << count << "/" << v4_routes.size() << " " << std::flush;
+				++count;
+				const Routes  old_file   = File::read(route.first);
+				const Routes& new_routes = route.second;
+				Routes new_file(old_file.size()+new_routes.size());
+				std::merge(
+					old_file.begin(),   old_file.end(),
+					new_routes.begin(), new_routes.end(),
+					new_file.begin()
+				);
+				File::write(route.first,new_file);
+			}
+			v4_routes.clear();
 		}
 	}
+
 	std::cout << std::endl;
 
 	return 0;

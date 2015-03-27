@@ -95,4 +95,5 @@ struct Route {
 
 // This object stores the mapping from ip
 // to the sequence of events.
-typedef std::map<ipv4,std::vector<Route>> RouteHistory;
+typedef std::vector<Route> Routes;
+typedef std::map<ipv4,Routes> RouteHistory;
