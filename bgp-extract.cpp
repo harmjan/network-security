@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
 		// try to extract the collector IP and map those to the
 		// physical locations but I decided that this was easier.
 		unsigned int collector;
-		std::sscanf( argv[i], "%u", &collector );
+		std::sscanf( argv[i], "data/%u.", &collector );
 
 		// Open the file
 		std::ifstream file_stream( argv[i] );
