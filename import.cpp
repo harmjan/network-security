@@ -180,7 +180,7 @@ namespace {
 	}
 
 	template<typename AsNumberSize>
-	void read_mrt_bgp4mp_message( std::istream& stream, RouteHistory& v4_routes, Timestamp timestamp, uint32_t length ) {
+	void read_mrt_bgp4mp_message( std::istream& stream, RouteHistory& v4_routes, Timestamp timestamp, uint32_t length, unsigned int collector ) {
 		AsNumberSize peer, local;
 		uint16_t interface, address_family;
 		// Read the message info from the stream
@@ -224,7 +224,7 @@ namespace {
 		Route route;
 		route.time   = timestamp;
 		route.from   = peer;
-		route.sensor = local;
+		route.sensor = collector;
 		bgp::read_message<AsNumberSize>( stream, v4_routes, route );
 	}
 
@@ -232,7 +232,7 @@ namespace {
 	 * Read a MRT message from the stream and add the data if applicable
 	 * to the routing table.
 	 */
-	bool read_mrt_message( std::istream& stream, RouteHistory& v4_routes ) {
+	bool read_mrt_message( std::istream& stream, RouteHistory& v4_routes, unsigned int collector ) {
 		Timestamp timestamp;
 		uint32_t length;
 		uint16_t type, subtype;
@@ -250,18 +250,14 @@ namespace {
 		subtype   = ntohs( subtype );
 		length    = ntohl( length );
 
-		// Get the timestamp more logically
-		//std::time_t tmp = timestamp;
-		//std::cerr << std::ctime(&tmp) << " " << type << " " << subtype << " " << length << std::endl;
-
 		// We only want to extract BGP messages and nothing else, check if
 		// the as number is 4 or 2 bytes and call the correct corresponding
 		// template.
 		if( type==MRT::Type::BGP4MP && subtype==MRT::BGP4MP::MESSAGE_AS4 ) {
-			read_mrt_bgp4mp_message<std::uint32_t>( stream, v4_routes, timestamp, length );
+			read_mrt_bgp4mp_message<std::uint32_t>( stream, v4_routes, timestamp, length, collector );
 		}
 		else if( type==MRT::Type::BGP4MP && subtype==MRT::BGP4MP::MESSAGE ) {
-			read_mrt_bgp4mp_message<std::uint16_t>( stream, v4_routes, timestamp, length );
+			read_mrt_bgp4mp_message<std::uint16_t>( stream, v4_routes, timestamp, length, collector );
 		}
 		else if( type==MRT::Type::BGP4MP && subtype==MRT::BGP4MP::STATE_CHANGE_AS4 ) {
 			// These messages are in the data but have no useful information
@@ -280,8 +276,8 @@ namespace {
 }
 
 namespace Import {
-	void import( std::istream& stream, RouteHistory& v4_routes ) {
+	void import( std::istream& stream, RouteHistory& v4_routes, unsigned int collector ) {
 		unsigned int messages = 0;
-		while( read_mrt_message( stream, v4_routes ) ) ++messages;
+		while( read_mrt_message( stream, v4_routes, collector ) ) ++messages;
 	}
 }

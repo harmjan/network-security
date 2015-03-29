@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <cstdio>
 
 #include "import.hpp"
 #include "file.hpp"
@@ -19,6 +20,13 @@ int main(int argc, char** argv) {
 		// Print some progress info
 		std::cout << "\rReading file " << i << " of " << (argc-1) << " : " << argv[i] << "                                            " << std::flush;
 
+		// The first 2 characters of the filename are currently
+		// the number of the collector. In the MRT file you could
+		// try to extract the collector IP and map those to the
+		// physical locations but I decided that this was easier.
+		unsigned int collector;
+		std::sscanf( argv[i], "%u", &collector );
+
 		// Open the file
 		std::ifstream file_stream( argv[i] );
 		if( !file_stream ) {
@@ -27,9 +35,9 @@ int main(int argc, char** argv) {
 		}
 
 		// Import the file into the maps
-		Import::import( file_stream, v4_routes );
+		Import::import( file_stream, v4_routes, collector );
 
-		// Every 100 files merge and clear the set
+		// Every 100 files merge and clear the map
 		if( i%100==0 || i==argc-1 ) {
 			// Sort the events that happened per ip range
 			// based on time.

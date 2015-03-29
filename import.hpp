@@ -5,5 +5,5 @@
 #include "data.hpp"
 
 namespace Import {
-	void import( std::istream& stream, RouteHistory& v4_routes );
+	void import( std::istream& stream, RouteHistory& v4_routes, unsigned int collector );
 }
