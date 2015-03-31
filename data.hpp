@@ -44,6 +44,27 @@ struct ip {
 		// bits just order them on broader suffix
 		return suffix < other_ip.suffix;
 	}
+
+	/**
+	 * Check if this prefix is contained in another one.
+	 */
+	bool operator << (const ip<bytes>& other_ip ) const {
+		std::uint8_t min_suffix = std::min(suffix, other_ip.suffix);
+		// Check for equality af all bytes you can compare
+		// easily
+		for( size_t i=0; i<min_suffix/8; ++i ) {
+			if( val[i] != other_ip.val[i] ) return false;
+		}
+		// Create a mask
+		std::uint8_t mask = 0;
+		for( size_t j=0; j<min_suffix%8; ++j ) {
+			mask |= 1<<(7-j);
+		}
+		// If the last bits are equal
+		if( (val[min_suffix/8]&mask) != (other_ip.val[min_suffix/8]&mask) ) return false;
+		// If the suffix is more specific is this prefix
+		// contained in the other_ip prefix.
+		return suffix >= other_ip.suffix;
 	}
 };
 
