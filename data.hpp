@@ -21,25 +21,29 @@ struct ip {
 	 *
 	 * This implementation first orders them on
 	 * the ip address numbers, if a range falls
-	 * within another range will the more specific
+	 * within another range will the less specific
 	 * range be ordered first.
 	 */
 	bool operator < (const ip<bytes>& other_ip ) const {
 		std::uint8_t min_suffix = std::min(suffix, other_ip.suffix);
-		for( size_t i=0; i<bytes; ++i ) {
-			if( (i+1)*8 > min_suffix ) {
-				std::uint8_t mask = 0;
-				for( size_t j=0; j<min_suffix%8; ++j ) {
-					mask = (mask<<1) | 1;
-				}
-				if( (val[i]&mask) < (other_ip.val[i]&mask) ) return true;
-				if( (val[i]&mask) > (other_ip.val[i]&mask) ) return false;
-				break;
-			}
+		// Check for equality af all bytes you can compare
+		// easily
+		for( size_t i=0; i<min_suffix/8; ++i ) {
 			if( val[i] < other_ip.val[i] ) return true;
 			if( val[i] > other_ip.val[i] ) return false;
 		}
-		return suffix > other_ip.suffix;
+		// Create a mask
+		std::uint8_t mask = 0;
+		for( size_t j=0; j<min_suffix%8; ++j ) {
+			mask |= 1<<(7-j);
+		}
+		// Check if the last bits determine the ordening
+		if( (val[min_suffix/8]&mask) < (other_ip.val[min_suffix/8]&mask) ) return true;
+		if( (val[min_suffix/8]&mask) > (other_ip.val[min_suffix/8]&mask) ) return false;
+		// If these ip's are equal in the first min_suffix
+		// bits just order them on broader suffix
+		return suffix < other_ip.suffix;
+	}
 	}
 };
 
