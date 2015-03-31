@@ -17,7 +17,7 @@ Download the data files of the ranges you want to analyze into a data/ directory
 
 The route announcements are now stored per collector chronologically. The bgp-extract program rewrites the announcement to a file per prefix ordered chronologically. Create a folder ip/ and run the program with:
 ```
-./bgp-extract data/*
+time ./bgp-extract data/*
 ```
 In my case did this take about 5 hours for a day of announcements and generated about 505000 files with a combined size of 5 Gigabytes. Not all MRT and BGP types are supported, but if the program doesn't know how to handle them it prints an warning message and continues. The program gives an indication of what it is doing and how far into the MRT files it is.
 ```
@@ -30,8 +30,20 @@ user    44m20.292s
 sys     21m28.938s
 ```
 
-After the extracting you can analyze the data with bgp-analyze. Giving all the filenames via * expansion doesn't work anymore so the list of ip prefixes is generated with ls.
+After the extracting you can analyze the data with bgp-analyze. Giving all the filenames via * expansion doesn't work anymore so the list of ip prefixes is generated with ls. The actual output is via the error stream, the command below will do an analysis and create a file warnings with the points of interest. The analysis takes about 1 hour for a day of announcements.
 ```
 ls ip/ > ips
-./bgp-analyze < ips
+time ./bgp-analyze < ips 2> warnings
+```
+
+```
+Reading in filenames
+Sorting filenames
+Doing analysis
+504990/504990
+All done!
+
+real    56m26.965s
+user    2m25.610s
+sys     0m40.907s
 ```
