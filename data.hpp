@@ -64,6 +64,7 @@ std::ostream& operator<<(std::ostream& os, const ipv6& obj);
 // Some literal typedef's
 typedef uint32_t AsNumber;
 typedef uint32_t Timestamp;
+typedef unsigned int CollectorNumber;
 
 /**
  * An event that happened route in BGP.
@@ -80,8 +81,9 @@ struct Route {
 	Timestamp time;
 	// The AS that advertised this route
 	AsNumber from;
-	// The AS that received this route
-	AsNumber sensor;
+	// The RIPE number of the for the site that
+	// collected these BGP messages.
+	CollectorNumber sensor;
 	// If the path is ordered, if the sequence
 	// of AS numbers is advertised in the correct
 	// order.
